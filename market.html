@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLAZE MARKET | Secure Trade Terminal</title>
+    <link rel="icon" href="https://fav.farm/🔥">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body { background: #000; color: #eee; font-family: 'JetBrains+Mono', monospace; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; margin: 0; }
+        .glass { background: rgba(10, 10, 10, 0.98); backdrop-filter: blur(10px); border: 1px solid #222; }
+        .blaze-orange { color: #ff5f00; }
+        .blaze-bg { background: #ff5f00; }
+        #dashboard { width: 95%; max-width: 1000px; height: 88vh; display: none; flex-direction: column; }
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #333; }
+        .tab-btn { padding: 8px; font-size: 10px; font-weight: 900; color: #444; border-bottom: 2px solid transparent; flex: 1; transition: 0.2s; cursor: pointer; text-align: center; }
+        .tab-btn.active { color: #ff5f00; border-bottom: 2px solid #ff5f00; background: rgba(255,95,0,0.05); }
+        .hidden-tab { display: none !important; }
+        input, textarea { background: #000 !important; border: 1px solid #222 !important; outline: none; transition: border 0.3s; color: white; }
+        input:focus, textarea:focus { border-color: #ff5f00 !important; }
+        .flicker { animation: flicker 1.5s infinite alternate; }
+        @keyframes flicker { 0% { opacity: 0.8; } 100% { opacity: 1; filter: drop-shadow(0 0 5px #ff5f00); } }
+    </style>
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="max-w-sm w-full p-8 glass rounded-3xl text-center border-t-2 border-orange-600 shadow-2xl">
+        <i data-lucide="store" class="blaze-orange flicker w-10 h-10 mx-auto mb-2"></i>
+        <h1 class="text-3xl font-black blaze-orange mb-1 italic tracking-tighter uppercase">Blaze Market</h1>
+        <p class="text-[9px] text-zinc-500 uppercase mb-6 font-bold">Secure Bank Marketplace Node</p>
+        <input id="u" type="text" placeholder="USER ID" class="w-full p-3 mb-3 rounded-xl text-xs">
+        <div class="relative mb-6">
+            <input id="p" type="password" placeholder="SECURE KEY" class="w-full p-3 rounded-xl text-xs">
+            <div class="absolute right-3 top-3 text-zinc-600 cursor-pointer" onclick="togglePass()">
+                <i data-lucide="eye" id="eye-icon" class="w-4 h-4"></i>
+            </div>
+        </div>
+        <button onclick="auth()" class="w-full blaze-bg text-black font-black py-3 rounded-xl uppercase text-xs mb-3">Access Market</button>
+        <a href="#" class="text-[9px] text-zinc-600 uppercase font-bold hover:text-white">Blaze Bank Network</a>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="glass rounded-3xl shadow-2xl p-4 flex">
+        <div class="flex justify-between items-center mb-4 px-1">
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1">
+                    <i data-lucide="store" class="blaze-orange w-3 h-3 flicker"></i>
+                    <span id="user-display" class="text-[10px] font-black blaze-orange uppercase"></span>
+                </div>
+                <div class="glass px-3 py-1 rounded-lg text-[9px] font-bold">
+                    BALANCE: <span id="bal" class="blaze-orange">0</span> <span class="text-[8px]">YZ</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="location.reload()" class="text-[8px] text-zinc-600 uppercase font-bold hover:text-white">Logout</button>
+            </div>
+        </div>
+
+        <div class="flex border-b border-zinc-900 mb-4">
+            <button onclick="switchTab('shop')" id="tab-shop" class="tab-btn active">MARKETPLACE</button>
+            <button onclick="switchTab('sell')" id="tab-sell" class="tab-btn">LIST PRODUCT</button>
+            <button onclick="switchTab('orders')" id="tab-orders" class="tab-btn">ORDERS & ESCROW</button>
+        </div>
+
+        <!-- TAB 1: SHOP FEED -->
+        <div id="content-shop" class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex gap-2 mb-3">
+                <input id="search-input" type="text" placeholder="Search products or sellers..." oninput="renderShop()" class="flex-1 p-2 text-[10px] rounded-xl">
+            </div>
+            <div id="product-grid" class="flex-1 overflow-y-auto custom-scroll grid grid-cols-1 md:grid-cols-3 gap-3 p-1"></div>
+        </div>
+
+        <!-- TAB 2: LIST PRODUCT -->
+        <div id="content-sell" class="hidden-tab flex-1 flex flex-col gap-3 max-w-lg mx-auto w-full justify-center">
+            <div class="glass p-6 rounded-2xl space-y-3 border-t-2 border-orange-600">
+                <h2 class="text-xs font-black uppercase blaze-orange tracking-wider">List New Item</h2>
+                <input id="prod-title" type="text" placeholder="Product Name" class="w-full p-2.5 text-[10px] rounded-xl">
+                <textarea id="prod-desc" placeholder="Item Description / Delivery Info" class="w-full p-2.5 text-[10px] rounded-xl h-20 resize-none"></textarea>
+                <div class="flex gap-2">
+                    <input id="prod-price" type="number" placeholder="Price (YZ)" class="flex-1 p-2.5 text-[10px] rounded-xl">
+                    <input id="prod-stock" type="number" placeholder="Stock Qty" class="w-28 p-2.5 text-[10px] rounded-xl" value="1">
+                </div>
+                <input id="prod-img" type="text" placeholder="Image URL (e.g., https://imgur.com/...)" class="w-full p-2.5 text-[10px] rounded-xl">
+                <button onclick="createProduct()" class="w-full py-3 blaze-bg text-black font-black rounded-xl uppercase text-[10px]">Publish Listing</button>
+            </div>
+        </div>
+
+        <!-- TAB 3: ORDERS -->
+        <div id="content-orders" class="hidden-tab flex-1 flex flex-col overflow-hidden">
+            <div class="flex-1 overflow-y-auto custom-scroll space-y-2 p-1" id="orders-list"></div>
+        </div>
+    </div>
+
+    <!-- PURCHASE CONFIRMATION MODAL -->
+    <div id="purchase-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="glass max-w-sm w-full p-6 rounded-2xl border border-orange-600/50 space-y-4">
+            <h3 class="text-xs font-black uppercase blaze-orange">Confirm Secure Purchase</h3>
+            <div id="modal-item-info" class="text-[10px] space-y-1 text-zinc-400"></div>
+            <div class="flex gap-2 pt-2">
+                <button onclick="closeModal()" class="flex-1 py-2.5 bg-zinc-900 text-zinc-400 font-bold rounded-xl text-[10px] uppercase">Cancel</button>
+                <button id="modal-confirm-btn" class="flex-1 py-2.5 blaze-bg text-black font-black rounded-xl text-[10px] uppercase">Confirm Buy</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const SB_URL = 'https://xctauoqsgsaphnranqix.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjdGF1b3FzZ3NhcGhucmFucWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwMjEwMzIsImV4cCI6MjA4NjU5NzAzMn0.oNTCRhfbt8i_XJpmF77YwBmB8UzDnZDJtcNGO68rZC4';
+        const sb = supabase.createClient(SB_URL, SB_KEY);
+
+        let user = null, activeTab = 'shop', allProducts = [], allOrders = [];
+        let selectedProductForBuy = null;
+
+        function togglePass() {
+            const p = document.getElementById('p'), i = document.getElementById('eye-icon');
+            p.type = p.type === 'password' ? 'text' : 'password';
+            i.setAttribute('data-lucide', p.type === 'password' ? 'eye' : 'eye-off');
+            lucide.createIcons();
+        }
+
+        async function auth() {
+            const u = document.getElementById('u').value.trim(), p = document.getElementById('p').value;
+            if(!u || !p) return;
+            const { data: acc } = await sb.from('profiles').select('*').eq('username', u).single();
+            if (acc && acc.password === p) {
+                user = acc;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('dashboard').style.display = 'flex';
+                document.getElementById('user-display').innerText = `@${user.username}`;
+                setInterval(refreshData, 3000);
+                refreshData();
+            } else {
+                alert("ACCESS DENIED / INVALID CREDENTIALS");
+            }
+        }
+
+        function switchTab(t) {
+            activeTab = t;
+            ['shop','sell','orders'].forEach(id => {
+                document.getElementById(`content-${id}`).classList.toggle('hidden-tab', id !== t);
+                document.getElementById(`tab-${id}`).classList.toggle('active', id === t);
+            });
+            if(t === 'shop') renderShop();
+            if(t === 'orders') renderOrders();
+        }
+
+        async function refreshData() {
+            if(!user) return;
+            const { data: me } = await sb.from('profiles').select('balance').eq('username', user.username).single();
+            if(me) { user.balance = me.balance; document.getElementById('bal').innerText = me.balance.toLocaleString(); }
+
+            const { data: prods } = await sb.from('products').select('*').order('created_at', { ascending: false });
+            allProducts = prods || [];
+            const { data: ords } = await sb.from('orders').select('*').order('created_at', { ascending: false });
+            allOrders = ords || [];
+
+            if(activeTab === 'shop') renderShop();
+            if(activeTab === 'orders') renderOrders();
+        }
+
+        function renderShop() {
+            const q = document.getElementById('search-input').value.toLowerCase();
+            const grid = document.getElementById('product-grid');
+            const filtered = allProducts.filter(p => p.title.toLowerCase().includes(q) || p.seller.toLowerCase().includes(q));
+
+            if(filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-3 text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No marketplace listings found</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => `
+                <div class="glass p-3 rounded-xl flex flex-col justify-between border border-zinc-900">
+                    <div>
+                        <div class="h-28 bg-zinc-950 rounded-lg mb-2 overflow-hidden flex items-center justify-center border border-zinc-900">
+                            ${p.image_url ? `<img src="${p.image_url}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150?text=No+Image'">` : '<i data-lucide="image" class="w-6 h-6 text-zinc-700"></i>'}
+                        </div>
+                        <h4 class="text-[10px] font-black uppercase truncate">${p.title}</h4>
+                        <p class="text-[8px] text-zinc-500 line-clamp-2 mb-2">${p.description || 'No description provided.'}</p>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-[9px] blaze-orange font-bold">${p.price} YZ</span>
+                            <span class="text-[8px] text-zinc-400">Stock: ${p.stock}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[7px] text-zinc-600 uppercase">By @${p.seller}</span>
+                            ${p.stock > 0 && p.seller !== user.username ? `
+                                <div class="flex items-center gap-1">
+                                    <input id="qty-${p.id}" type="number" value="1" min="1" max="${p.stock}" class="w-10 text-center text-[9px] p-1 rounded">
+                                    <button onclick="promptBuy(${p.id})" class="px-2.5 py-1 blaze-bg text-black font-black text-[8px] rounded uppercase">Buy</button>
+                                </div>
+                            ` : '<span class="text-[7px] text-zinc-700 uppercase font-bold">Unavailable</span>'}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function createProduct() {
+            const title = document.getElementById('prod-title').value.trim();
+            const description = document.getElementById('prod-desc').value.trim();
+            const price = parseInt(document.getElementById('prod-price').value);
+            const stock = parseInt(document.getElementById('prod-stock').value);
+            const image_url = document.getElementById('prod-img').value.trim();
+
+            if(!title || isNaN(price) || price <= 0 || isNaN(stock) || stock <= 0) {
+                alert("Please fill out valid product details.");
+                return;
+            }
+
+            await sb.from('products').insert([{ seller: user.username, title, description, price, stock, image_url }]);
+            alert("Product published successfully!");
+            document.getElementById('prod-title').value = '';
+            document.getElementById('prod-desc').value = '';
+            document.getElementById('prod-price').value = '';
+            document.getElementById('prod-stock').value = '1';
+            document.getElementById('prod-img').value = '';
+            switchTab('shop');
+        }
+
+        function promptBuy(productId) {
+            const prod = allProducts.find(p => p.id === productId);
+            const qtyInput = document.getElementById(`qty-${productId}`);
+            const qty = parseInt(qtyInput ? qtyInput.value : 1);
+
+            if(qty > prod.stock || qty <= 0) { alert("Invalid quantity selected."); return; }
+            const total = prod.price * qty;
+
+            if(user.balance < total) { alert("Insufficient YZ balance!"); return; }
+
+            selectedProductForBuy = { prod, qty, total };
+            document.getElementById('modal-item-info').innerHTML = `
+                <p><b>Item:</b> ${prod.title}</p>
+                <p><b>Seller:</b> @${prod.seller}</p>
+                <p><b>Quantity:</b> ${qty}x</p>
+                <p class="text-white font-bold pt-1">Total Cost: <span class="blaze-orange">${total} YZ</span></p>
+            `;
+            document.getElementById('modal-confirm-btn').onclick = executeBuy;
+            document.getElementById('purchase-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('purchase-modal').classList.add('hidden');
+            selectedProductForBuy = null;
+        }
+
+        async function executeBuy() {
+            if(!selectedProductForBuy) return;
+            const { prod, qty, total } = selectedProductForBuy;
+
+            const { data: buyerAcc } = await sb.from('profiles').select('*').eq('username', user.username).single();
+            const { data: sellerAcc } = await sb.from('profiles').select('*').eq('username', prod.seller).single();
+            const { data: liveProd } = await sb.from('products').select('*').eq('id', prod.id).single();
+
+            if(buyerAcc.balance < total || liveProd.stock < qty) {
+                alert("Purchase failed: Stock or balance changed.");
+                closeModal();
+                refreshData();
+                return;
+            }
+
+            await sb.from('profiles').update({ balance: buyerAcc.balance - total }).eq('username', buyerAcc.username);
+            await sb.from('profiles').update({ balance: sellerAcc.balance + total }).eq('username', sellerAcc.username);
+            await sb.from('products').update({ stock: liveProd.stock - qty }).eq('id', prod.id);
+
+            await sb.from('transactions').insert([{ sender: buyerAcc.username, receiver: prod.seller, amount: total, note: `Market Purchase: ${prod.title} (${qty}x)` }]);
+            await sb.from('orders').insert([{ product_id: prod.id, buyer: buyerAcc.username, seller: prod.seller, quantity: qty, total_price: total, status: 'active' }]);
+
+            closeModal();
+            alert("Purchase successful!");
+            refreshData();
+        }
+
+        function renderOrders() {
+            const container = document.getElementById('orders-list');
+            const myOrders = allOrders.filter(o => o.buyer === user.username || o.seller === user.username);
+
+            if(myOrders.length === 0) {
+                container.innerHTML = `<div class="text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No order history found</div>`;
+                return;
+            }
+
+            container.innerHTML = myOrders.map(o => {
+                const prod = allProducts.find(p => p.id === o.product_id) || { title: 'Unknown Product' };
+                const isBuyer = o.buyer === user.username;
+                const minutesPassed = (new Date() - new Date(o.created_at)) / (1000 * 60);
+                const canCancel = isBuyer && o.status === 'active' && minutesPassed <= 10;
+
+                return `
+                    <div class="glass p-3 rounded-xl border border-zinc-900 flex flex-col gap-2">
+                        <div class="flex justify-between items-center text-[9px]">
+                            <div>
+                                <b class="uppercase text-white">${prod.title}</b> <span class="text-zinc-500">(${o.quantity}x)</span>
+                                <div class="text-[8px] text-zinc-500">Role: <span class="text-orange-500 uppercase font-bold">${isBuyer ? 'Buyer' : 'Seller'}</span> | Counterparty: @${isBuyer ? o.seller : o.buyer}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="blaze-orange font-bold">${o.total_price} YZ</span>
+                                <div class="text-[7px] uppercase font-bold text-zinc-400 mt-0.5">Status: ${o.status}</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 justify-end border-t border-zinc-900 pt-2">
+                            ${canCancel ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 bg-red-950 text-red-400 text-[8px] font-bold rounded uppercase">Cancel & Refund (${Math.ceil(10 - minutesPassed)}m left)</button>` : ''}
+                            
+                            ${isBuyer && o.status === 'fulfillment_requested' ? `
+                                <button onclick="updateOrderStatus(${o.id}, 'completed')" class="px-3 py-1 bg-green-600 text-white text-[8px] font-bold rounded uppercase">Accept & Close</button>
+                            ` : ''}
+
+                            {!isBuyer && o.status === 'active' ? `
+                                <button onclick="updateOrderStatus(${o.id}, 'fulfillment_requested')" class="px-3 py-1 blaze-bg text-black text-[8px] font-black rounded uppercase">Request Close</button>
+                            ` : ''}
+
+                            {isBuyer && o.status === 'active' && !canCancel ? `
+                                <button onclick="updateOrderStatus(${o.id}, 'return_requested')" class="px-3 py-1 bg-zinc-900 text-zinc-400 text-[8px] font-bold rounded uppercase hover:text-white">Request Return</button>
+                            ` : ''}
+
+                            {!isBuyer && o.status === 'return_requested' ? `
+                                <button onclick="approveReturn(${o.id})" class="px-3 py-1 bg-red-600 text-white text-[8px] font-bold rounded uppercase">Approve Return & Refund</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function cancelOrder(orderId) {
+            if(!confirm("Cancel order and issue full refund?")) return;
+            const ord = allOrders.find(o => o.id === orderId);
+            if(!ord) return;
+
+            const { data: buyerAcc } = await sb.from('profiles').select('*').eq('username', ord.buyer).single();
+            const { data: sellerAcc } = await sb.from('profiles').select('*').eq('username', ord.seller).single();
+            const { data: prod } = await sb.from('products').select('*').eq('id', ord.product_id).single();
+
+            await sb.from('profiles').update({ balance: buyerAcc.balance + ord.total_price }).eq('username', ord.buyer);
+            await sb.from('profiles').update({ balance: sellerAcc.balance - ord.total_price }).eq('username', ord.seller);
+            if(prod) await sb.from('products').update({ stock: prod.stock + ord.quantity }).eq('id', ord.product_id);
+
+            await sb.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
+            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: `Order Cancelled & Refunded` }]);
+
+            alert("Order cancelled and refunded.");
+            refreshData();
+        }
+
+        async function updateOrderStatus(orderId, status) {
+            await sb.from('orders').update({ status }).eq('id', orderId);
+            refreshData();
+        }
+
+        async function approveReturn(orderId) {
+            if(!confirm("Approve return and issue refund to buyer?")) return;
+            const ord = allOrders.find(o => o.id === orderId);
+            if(!ord) return;
+
+            const { data: buyerAcc } = await sb.from('profiles').select('*').eq('username', ord.buyer).single();
+            const { data: sellerAcc } = await sb.from('profiles').select('*').eq('username', ord.seller).single();
+            const { data: prod } = await sb.from('products').select('*').eq('id', ord.product_id).single();
+
+            await sb.from('profiles').update({ balance: buyerAcc.balance + ord.total_price }).eq('username', ord.buyer);
+            await sb.from('profiles').update({ balance: sellerAcc.balance - ord.total_price }).eq('username', ord.seller);
+            if(prod) await sb.from('products').update({ stock: prod.stock + ord.quantity }).eq('id', ord.product_id);
+
+            await sb.from('orders').update({ status: 'returned' }).eq('id', orderId);
+            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: `Return Approved & Refunded` }]);
+
+            alert("Return approved and refund issued.");
+            refreshData();
+        }
+    </script>
+</body>
+</html>
