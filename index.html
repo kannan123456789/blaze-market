@@ -132,7 +132,7 @@
                 user = acc;
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('dashboard').style.display = 'flex';
-                document.getElementById('user-display').innerText = `@${user.username}`;
+                document.getElementById('user-display').innerText = '@' + user.username;
                 setInterval(refreshData, 3000);
                 refreshData();
             } else {
@@ -143,8 +143,8 @@
         function switchTab(t) {
             activeTab = t;
             ['shop','sell','orders'].forEach(id => {
-                document.getElementById(`content-${id}`).classList.toggle('hidden-tab', id !== t);
-                document.getElementById(`tab-${id}`).classList.toggle('active', id === t);
+                document.getElementById('content-' + id).classList.toggle('hidden-tab', id !== t);
+                document.getElementById('tab-' + id).classList.toggle('active', id === t);
             });
             if(t === 'shop') renderShop();
             if(t === 'orders') renderOrders();
@@ -170,7 +170,7 @@
             const filtered = allProducts.filter(p => p.title.toLowerCase().includes(q) || p.seller.toLowerCase().includes(q));
 
             if(filtered.length === 0) {
-                grid.innerHTML = `<div class="col-span-3 text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No marketplace listings found</div>`;
+                grid.innerHTML = '<div class="col-span-3 text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No marketplace listings found</div>';
                 return;
             }
 
@@ -178,7 +178,7 @@
                 <div class="glass p-3 rounded-xl flex flex-col justify-between border border-zinc-900">
                     <div>
                         <div class="h-28 bg-zinc-950 rounded-lg mb-2 overflow-hidden flex items-center justify-center border border-zinc-900">
-                            ${p.image_url ? `<img src="${p.image_url}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150?text=No+Image'">` : '<i data-lucide="image" class="w-6 h-6 text-zinc-700"></i>'}
+                            ${p.image_url ? '<img src="' + p.image_url + '" class="w-full h-full object-cover" onerror="this.src=\'https://via.placeholder.com/150?text=No+Image\'">' : '<i data-lucide="image" class="w-6 h-6 text-zinc-700"></i>'}
                         </div>
                         <h4 class="text-[10px] font-black uppercase truncate">${p.title}</h4>
                         <p class="text-[8px] text-zinc-500 line-clamp-2 mb-2">${p.description || 'No description provided.'}</p>
@@ -227,7 +227,7 @@
 
         function promptBuy(productId) {
             const prod = allProducts.find(p => p.id === productId);
-            const qtyInput = document.getElementById(`qty-${productId}`);
+            const qtyInput = document.getElementById('qty-' + productId);
             const qty = parseInt(qtyInput ? qtyInput.value : 1);
 
             if(qty > prod.stock || qty <= 0) { alert("Invalid quantity selected."); return; }
@@ -270,7 +270,7 @@
             await sb.from('profiles').update({ balance: sellerAcc.balance + total }).eq('username', sellerAcc.username);
             await sb.from('products').update({ stock: liveProd.stock - qty }).eq('id', prod.id);
 
-            await sb.from('transactions').insert([{ sender: buyerAcc.username, receiver: prod.seller, amount: total, note: `Market Purchase: ${prod.title} (${qty}x)` }]);
+            await sb.from('transactions').insert([{ sender: buyerAcc.username, receiver: prod.seller, amount: total, note: 'Market Purchase: ' + prod.title + ' (' + qty + 'x)' }]);
             await sb.from('orders').insert([{ product_id: prod.id, buyer: buyerAcc.username, seller: prod.seller, quantity: qty, total_price: total, status: 'active' }]);
 
             closeModal();
@@ -283,7 +283,7 @@
             const myOrders = allOrders.filter(o => o.buyer === user.username || o.seller === user.username);
 
             if(myOrders.length === 0) {
-                container.innerHTML = `<div class="text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No order history found</div>`;
+                container.innerHTML = '<div class="text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No order history found</div>';
                 return;
             }
 
@@ -292,6 +292,23 @@
                 const isBuyer = o.buyer === user.username;
                 const minutesPassed = (new Date() - new Date(o.created_at)) / (1000 * 60);
                 const canCancel = isBuyer && o.status === 'active' && minutesPassed <= 10;
+
+                let actionButtons = '';
+                if(canCancel) {
+                    actionButtons += '<button onclick="cancelOrder(' + o.id + ')" class="px-3 py-1 bg-red-950 text-red-400 text-[8px] font-bold rounded uppercase">Cancel & Refund (' + Math.ceil(10 - minutesPassed) + 'm left)</button>';
+                }
+                if(isBuyer && o.status === 'fulfillment_requested') {
+                    actionButtons += '<button onclick="updateOrderStatus(' + o.id + ', \'completed\')" class="px-3 py-1 bg-green-600 text-white text-[8px] font-bold rounded uppercase">Accept & Close</button>';
+                }
+                if(!isBuyer && o.status === 'active') {
+                    actionButtons += '<button onclick="updateOrderStatus(' + o.id + ', \'fulfillment_requested\')" class="px-3 py-1 blaze-bg text-black text-[8px] font-black rounded uppercase">Request Close</button>';
+                }
+                if(isBuyer && o.status === 'active' && !canCancel) {
+                    actionButtons += '<button onclick="updateOrderStatus(' + o.id + ', \'return_requested\')" class="px-3 py-1 bg-zinc-900 text-zinc-400 text-[8px] font-bold rounded uppercase hover:text-white">Request Return</button>';
+                }
+                if(!isBuyer && o.status === 'return_requested') {
+                    actionButtons += '<button onclick="approveReturn(' + o.id + ')" class="px-3 py-1 bg-red-600 text-white text-[8px] font-bold rounded uppercase">Approve Return & Refund</button>';
+                }
 
                 return `
                     <div class="glass p-3 rounded-xl border border-zinc-900 flex flex-col gap-2">
@@ -306,23 +323,7 @@
                             </div>
                         </div>
                         <div class="flex gap-2 justify-end border-t border-zinc-900 pt-2">
-                            ${canCancel ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 bg-red-950 text-red-400 text-[8px] font-bold rounded uppercase">Cancel & Refund (${Math.ceil(10 - minutesPassed)}m left)</button>` : ''}
-                            
-                            ${isBuyer && o.status === 'fulfillment_requested' ? `
-                                <button onclick="updateOrderStatus(${o.id}, 'completed')" class="px-3 py-1 bg-green-600 text-white text-[8px] font-bold rounded uppercase">Accept & Close</button>
-                            ` : ''}
-
-                            {!isBuyer && o.status === 'active' ? `
-                                <button onclick="updateOrderStatus(${o.id}, 'fulfillment_requested')" class="px-3 py-1 blaze-bg text-black text-[8px] font-black rounded uppercase">Request Close</button>
-                            ` : ''}
-
-                            {isBuyer && o.status === 'active' && !canCancel ? `
-                                <button onclick="updateOrderStatus(${o.id}, 'return_requested')" class="px-3 py-1 bg-zinc-900 text-zinc-400 text-[8px] font-bold rounded uppercase hover:text-white">Request Return</button>
-                            ` : ''}
-
-                            {!isBuyer && o.status === 'return_requested' ? `
-                                <button onclick="approveReturn(${o.id})" class="px-3 py-1 bg-red-600 text-white text-[8px] font-bold rounded uppercase">Approve Return & Refund</button>
-                            ` : ''}
+                            ${actionButtons}
                         </div>
                     </div>
                 `;
@@ -343,7 +344,7 @@
             if(prod) await sb.from('products').update({ stock: prod.stock + ord.quantity }).eq('id', ord.product_id);
 
             await sb.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
-            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: `Order Cancelled & Refunded` }]);
+            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: 'Order Cancelled & Refunded' }]);
 
             alert("Order cancelled and refunded.");
             refreshData();
@@ -368,7 +369,7 @@
             if(prod) await sb.from('products').update({ stock: prod.stock + ord.quantity }).eq('id', ord.product_id);
 
             await sb.from('orders').update({ status: 'returned' }).eq('id', orderId);
-            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: `Return Approved & Refunded` }]);
+            await sb.from('transactions').insert([{ sender: ord.seller, receiver: ord.buyer, amount: ord.total_price, note: 'Return Approved & Refunded' }]);
 
             alert("Return approved and refund issued.");
             refreshData();
