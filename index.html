@@ -17,7 +17,6 @@
         .blaze-bg:hover { background: #e05400; filter: brightness(0.9); }
         .blaze-bg:active { transform: scale(0.97); }
         
-        /* General button micro-interactions */
         button { transition: all 0.15s ease; cursor: pointer; }
         button:hover { filter: brightness(0.85); }
         button:active { transform: scale(0.97); }
@@ -100,6 +99,14 @@
 
         <!-- TAB 3: ORDERS -->
         <div id="content-orders" class="hidden-tab flex-1 flex flex-col overflow-hidden">
+            <!-- Action Toolbar for Logs -->
+            <div class="flex justify-between items-center mb-2 px-1">
+                <span class="text-[9px] text-zinc-500 uppercase font-bold">Activity Logs & Escrow</span>
+                <div class="flex gap-2">
+                    <button onclick="playSound('click'); hideAllLogs()" class="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-[8px] font-bold rounded uppercase">Hide All</button>
+                    <button onclick="playSound('click'); revertAllLogs()" class="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-[8px] font-bold rounded uppercase">Revert All</button>
+                </div>
+            </div>
             <div class="flex-1 overflow-y-auto custom-scroll space-y-2 p-1" id="orders-list"></div>
         </div>
     </div>
@@ -124,9 +131,9 @@
 
         let user = null, activeTab = 'shop', allProducts = [], allOrders = [];
         let selectedProductForBuy = null;
+        let hiddenLogs = new Set(); // Tracks hidden log IDs
         const quantities = {}; 
 
-        // WEB AUDIO API SOUND GENERATOR
         function playSound(type) {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -152,9 +159,7 @@
                     osc.start();
                     osc.stop(ctx.currentTime + 0.15);
                 }
-            } catch(e) {
-                // Audio context blocked until interaction safeguard
-            }
+            } catch(e) {}
         }
 
         function togglePass() {
@@ -349,18 +354,19 @@
             const container = document.getElementById('orders-list');
             const myOrders = allOrders.filter(o => o.buyer === user.username || o.seller === user.username);
 
-            if(myOrders.length === 0) {
-                container.innerHTML = '<div class="text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No order history found</div>';
+            if(myOrders.length === 0 || myOrders.every(o => hiddenLogs.has(o.id))) {
+                container.innerHTML = '<div class="text-center text-zinc-600 text-[10px] py-12 uppercase font-bold">No visible order history found</div>';
                 return;
             }
 
             container.innerHTML = myOrders.map(o => {
+                if (hiddenLogs.has(o.id)) return ''; // Skip hidden logs
+
                 const prod = allProducts.find(p => p.id === o.product_id) || { title: 'Unknown Product' };
                 const isBuyer = o.buyer === user.username;
 
                 let actionButtons = '';
                 
-                // Active order actions
                 if(isBuyer && o.status === 'active') {
                     actionButtons += '<button onclick="playSound(\'click\'); updateOrderStatus(' + o.id + ', \'cancel_requested\')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[8px] font-bold rounded uppercase">Request Cancellation</button>';
                 }
@@ -370,13 +376,9 @@
                 if(!isBuyer && o.status === 'active') {
                     actionButtons += '<button onclick="playSound(\'click\'); updateOrderStatus(' + o.id + ', \'fulfillment_requested\')" class="px-3 py-1 blaze-bg text-black text-[8px] font-black rounded uppercase">Mark Fulfilled</button>';
                 }
-
-                // Fulfillment flow
                 if(isBuyer && o.status === 'fulfillment_requested') {
                     actionButtons += '<button onclick="playSound(\'click\'); updateOrderStatus(' + o.id + ', \'completed\')" class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-[8px] font-bold rounded uppercase">Accept & Close</button>';
                 }
-
-                // Completed order return flow
                 if(isBuyer && o.status === 'completed') {
                     actionButtons += '<button onclick="playSound(\'click\'); updateOrderStatus(' + o.id + ', \'return_requested\')" class="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-[8px] font-bold rounded uppercase">Request Return</button>';
                 }
@@ -385,8 +387,9 @@
                 }
 
                 return `
-                    <div class="glass p-3 rounded-xl border border-zinc-900 flex flex-col gap-2">
-                        <div class="flex justify-between items-center text-[9px]">
+                    <div class="glass p-3 rounded-xl border border-zinc-900 flex flex-col gap-2 relative">
+                        <button onclick="playSound(\'click\'); hideLog(${o.id})" title="Hide Log" class="absolute top-2 right-2 text-zinc-600 hover:text-red-400 font-black text-[9px] px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-900">✕</button>
+                        <div class="flex justify-between items-center text-[9px] pr-6">
                             <div>
                                 <b class="uppercase text-white">${prod.title}</b> <span class="text-zinc-500">(${o.quantity}x)</span>
                                 <div class="text-[8px] text-zinc-500">Role: <span class="text-orange-500 uppercase font-bold">${isBuyer ? 'Buyer' : 'Seller'}</span> | Counterparty: @${isBuyer ? o.seller : o.buyer}</div>
@@ -402,6 +405,22 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function hideLog(id) {
+            hiddenLogs.add(id);
+            renderOrders();
+        }
+
+        function hideAllLogs() {
+            const myOrders = allOrders.filter(o => o.buyer === user.username || o.seller === user.username);
+            myOrders.forEach(o => hiddenLogs.add(o.id));
+            renderOrders();
+        }
+
+        function revertAllLogs() {
+            hiddenLogs.clear();
+            renderOrders();
         }
 
         async function updateOrderStatus(orderId, status) {
