@@ -382,7 +382,7 @@
             await sb.from('orders').insert([{ product_id: prod.id, buyer: buyerAcc.username, seller: prod.seller, quantity: qty, total_price: total, status: 'active' }]);
 
             closeModal();
-            playSound('success');
+            playSound('payment');
             alert("Purchase successful!");
             refreshData();
         }
